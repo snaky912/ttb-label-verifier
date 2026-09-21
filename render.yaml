@@ -1,0 +1,19 @@
+# Render Blueprint: New > Blueprint in the Render dashboard, pick this repo.
+# Secrets marked sync:false are prompted for during setup, never stored here.
+services:
+  - type: web
+    name: ttb-label-verifier
+    runtime: node
+    plan: free
+    buildCommand: npm install --omit=dev
+    startCommand: npm start
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: ACCESS_CODE
+        sync: false
+      - key: DAILY_LABEL_LIMIT
+        value: "200"

@@ -19,7 +19,9 @@ import { EXTRACTION_PROMPT, coerceExtraction, emptyExtraction } from './prompt.j
  * second, so it is the default; MODEL can be overridden per deployment if
  * a harder corpus needs it.
  */
-const DEFAULT_MODEL = process.env.TTB_MODEL || 'claude-haiku-4-5-20251001';
+// Read at call time, not import time: server.js loads .env after ES module
+// imports have already been evaluated.
+const model = () => process.env.TTB_MODEL || 'claude-haiku-4-5-20251001';
 const MAX_TOKENS = 2048;
 
 let client = null;
@@ -65,7 +67,7 @@ export async function extractLabel(imageBuffer, mediaType, { signal } = {}) {
   try {
     const response = await getClient().messages.create(
       {
-        model: DEFAULT_MODEL,
+        model: model(),
         max_tokens: MAX_TOKENS,
         messages: [
           {
@@ -92,7 +94,7 @@ export async function extractLabel(imageBuffer, mediaType, { signal } = {}) {
     if (!parsed) {
       return {
         extraction: emptyExtraction('The label could not be read into a usable result.'),
-        timing: { ms: Date.now() - started, model: DEFAULT_MODEL, parsed: false },
+        timing: { ms: Date.now() - started, model: model(), parsed: false },
       };
     }
 
@@ -100,7 +102,7 @@ export async function extractLabel(imageBuffer, mediaType, { signal } = {}) {
       extraction: coerceExtraction(parsed),
       timing: {
         ms: Date.now() - started,
-        model: DEFAULT_MODEL,
+        model: model(),
         parsed: true,
         inputTokens: response.usage?.input_tokens ?? null,
         outputTokens: response.usage?.output_tokens ?? null,
@@ -109,7 +111,7 @@ export async function extractLabel(imageBuffer, mediaType, { signal } = {}) {
   } catch (err) {
     return {
       extraction: emptyExtraction(`Label could not be read: ${err.message}`),
-      timing: { ms: Date.now() - started, model: DEFAULT_MODEL, parsed: false, error: err.message },
+      timing: { ms: Date.now() - started, model: model(), parsed: false, error: err.message },
     };
   }
 }

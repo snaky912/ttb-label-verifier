@@ -34,10 +34,19 @@ loadDotEnv(path.join(path.dirname(fileURLToPath(import.meta.url)), '.env'));
 import { verifyLabel } from './src/core/verify.js';
 import { extractLabel } from './src/extract/anthropic.js';
 import { GOVERNMENT_WARNING } from './src/core/rules.js';
+import { costGuard } from './src/server/guard.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
 const PORT = process.env.PORT || 3000;
+
+// Render and similar hosts sit behind a proxy; trust it for req.ip etc.
+app.set('trust proxy', 1);
+
+const guard = costGuard({
+  accessCode: process.env.ACCESS_CODE || '',
+  dailyLimit: Number(process.env.DAILY_LABEL_LIMIT) || 0,
+});
 
 /** In-memory only: nothing touches the filesystem. */
 const upload = multer({
@@ -63,7 +72,8 @@ app.get('/api/health', (_req, res) => {
   res.json({
     ok: true,
     modelConfigured: Boolean(process.env.ANTHROPIC_API_KEY),
-    warningTextLength: GOVERNMENT_WARNING.length,
+    accessCodeRequired: Boolean(process.env.ACCESS_CODE),
+    dailyUsage: guard.status(),
   });
 });
 
@@ -81,7 +91,7 @@ app.get('/api/rules', (_req, res) => {
  * stream back to the agent as each finishes rather than waiting for the
  * slowest label in a batch of three hundred.
  */
-app.post('/api/verify', upload.single('image'), async (req, res) => {
+app.post('/api/verify', guard, upload.single('image'), async (req, res) => {
   const started = Date.now();
   try {
     if (!req.file) {
@@ -130,4 +140,8 @@ app.listen(PORT, () => {
   if (!process.env.ANTHROPIC_API_KEY) {
     console.warn('WARNING: ANTHROPIC_API_KEY is not set — /api/verify will return read errors.');
   }
+  console.log(
+    `Access code ${process.env.ACCESS_CODE ? 'required' : 'not required'}; ` +
+      `daily label limit ${Number(process.env.DAILY_LABEL_LIMIT) || 'none'}.`,
+  );
 });

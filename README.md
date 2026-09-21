@@ -73,6 +73,34 @@ each) and `applications.csv` (ready to load in batch mode).
 
 ---
 
+## Deploying a demo for reviewers
+
+The repo includes a Render blueprint (`render.yaml`) for the free tier.
+
+1. Push the repo to GitHub.
+2. In the Render dashboard: **New → Blueprint**, pick the repo.
+3. When prompted, set `ANTHROPIC_API_KEY` and `ACCESS_CODE` (any phrase, e.g.
+   `label-demo-2026`). `DAILY_LABEL_LIMIT` defaults to 200.
+4. Send reviewers `https://<your-service>.onrender.com/?code=<ACCESS_CODE>`.
+   The code travels in the link, so there is nothing to type.
+
+**Cost controls.** Without the code, `/api/verify` refuses requests, so a
+leaked or guessed URL can't spend your API credit. The daily limit caps the
+worst case per day; it's an in-memory counter, so a restart resets it. The
+hard backstop belongs in the Anthropic Console: prepaid credits with
+auto-reload turned off, so spending physically cannot exceed the balance.
+
+**Cold starts.** Free Render services sleep after 15 minutes idle and take
+about a minute to wake. The first check after a quiet period will blow
+straight through the five-second target; later ones won't. Open the link
+yourself shortly before reviewers are expected, or use a paid instance
+(which doesn't sleep) for the review window.
+
+`GET /api/health` reports whether a key and access code are configured and
+today's usage against the limit.
+
+---
+
 ## Using it
 
 **One label.** The form opens with a worked example filled in. Enter what the
@@ -129,6 +157,8 @@ HTML file and swaps only the transport — so the two can never drift apart.
 | `ANTHROPIC_API_KEY` | — | Required for the server build |
 | `TTB_MODEL` | `claude-haiku-4-5-20251001` | Vision model; the default is chosen for latency |
 | `PORT` | `3000` | HTTP port |
+| `ACCESS_CODE` | off | When set, checks require `?code=` in the page link |
+| `DAILY_LABEL_LIMIT` | off | Maximum labels checked per UTC day |
 
 ---
 

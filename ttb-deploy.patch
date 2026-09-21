@@ -1,0 +1,378 @@
+diff --git a/.env.example b/.env.example
+index e1b17da..ee542b7 100644
+--- a/.env.example
++++ b/.env.example
+@@ -5,3 +5,9 @@ ANTHROPIC_API_KEY=
+ # TTB_MODEL=claude-haiku-4-5-20251001
+ 
+ # PORT=3000
++
++# Cost guards for a public deployment (both off when unset).
++# ACCESS_CODE: reviewers open https://your-app/?code=THIS-VALUE
++# ACCESS_CODE=
++# DAILY_LABEL_LIMIT: max labels checked per UTC day across all users.
++# DAILY_LABEL_LIMIT=200
+diff --git a/.node-version b/.node-version
+new file mode 100644
+index 0000000..2bd5a0a
+--- /dev/null
++++ b/.node-version
+@@ -0,0 +1 @@
++22
+diff --git a/README.md b/README.md
+index 860f150..249165c 100644
+--- a/README.md
++++ b/README.md
+@@ -73,6 +73,34 @@ each) and `applications.csv` (ready to load in batch mode).
+ 
+ ---
+ 
++## Deploying a demo for reviewers
++
++The repo includes a Render blueprint (`render.yaml`) for the free tier.
++
++1. Push the repo to GitHub.
++2. In the Render dashboard: **New → Blueprint**, pick the repo.
++3. When prompted, set `ANTHROPIC_API_KEY` and `ACCESS_CODE` (any phrase, e.g.
++   `label-demo-2026`). `DAILY_LABEL_LIMIT` defaults to 200.
++4. Send reviewers `https://<your-service>.onrender.com/?code=<ACCESS_CODE>`.
++   The code travels in the link, so there is nothing to type.
++
++**Cost controls.** Without the code, `/api/verify` refuses requests, so a
++leaked or guessed URL can't spend your API credit. The daily limit caps the
++worst case per day; it's an in-memory counter, so a restart resets it. The
++hard backstop belongs in the Anthropic Console: prepaid credits with
++auto-reload turned off, so spending physically cannot exceed the balance.
++
++**Cold starts.** Free Render services sleep after 15 minutes idle and take
++about a minute to wake. The first check after a quiet period will blow
++straight through the five-second target; later ones won't. Open the link
++yourself shortly before reviewers are expected, or use a paid instance
++(which doesn't sleep) for the review window.
++
++`GET /api/health` reports whether a key and access code are configured and
++today's usage against the limit.
++
++---
++
+ ## Using it
+ 
+ **One label.** The form opens with a worked example filled in. Enter what the
+@@ -129,6 +157,8 @@ HTML file and swaps only the transport — so the two can never drift apart.
+ | `ANTHROPIC_API_KEY` | — | Required for the server build |
+ | `TTB_MODEL` | `claude-haiku-4-5-20251001` | Vision model; the default is chosen for latency |
+ | `PORT` | `3000` | HTTP port |
++| `ACCESS_CODE` | off | When set, checks require `?code=` in the page link |
++| `DAILY_LABEL_LIMIT` | off | Maximum labels checked per UTC day |
+ 
+ ---
+ 
+diff --git a/package.json b/package.json
+index 948bfe8..5ef18ea 100644
+--- a/package.json
++++ b/package.json
+@@ -11,7 +11,7 @@
+   "scripts": {
+     "start": "node server.js",
+     "dev": "node --watch server.js",
+-    "test": "node --test tests/verify.test.js",
++    "test": "node --test tests/verify.test.js tests/guard.test.js",
+     "samples": "node scripts/generate-samples.js",
+     "build:artifact": "node scripts/build-artifact.js",
+     "smoke": "node scripts/build-artifact.js && node scripts/smoke-test.js"
+diff --git a/public/app.js b/public/app.js
+index a9c32c0..d4b5da9 100644
+--- a/public/app.js
++++ b/public/app.js
+@@ -8,6 +8,21 @@
+ import { mountApp } from './ui.js';
+ import { downscaleImage } from './downscale.js';
+ 
++/**
++ * A deployed demo may require an access code. It arrives in the link
++ * (?code=...) so reviewers never type it, and is kept for the tab's
++ * session so reloading the page doesn't lose it.
++ */
++function accessCode() {
++  const fromUrl = new URLSearchParams(location.search).get('code');
++  try {
++    if (fromUrl) sessionStorage.setItem('ttb-access-code', fromUrl);
++    return fromUrl || sessionStorage.getItem('ttb-access-code') || '';
++  } catch {
++    return fromUrl || '';
++  }
++}
++
+ async function verifyOne(file, application, signal) {
+   // Shrink before upload. A phone photo is often 4-8 MB; the model reads
+   // a 1600px-wide image just as well, and the smaller payload is a large
+@@ -18,7 +33,12 @@ async function verifyOne(file, application, signal) {
+   form.append('image', prepared, file.name);
+   form.append('application', JSON.stringify(application));
+ 
+-  const res = await fetch('/api/verify', { method: 'POST', body: form, signal });
++  const res = await fetch('/api/verify', {
++    method: 'POST',
++    body: form,
++    signal,
++    headers: { 'x-access-code': accessCode() },
++  });
+   if (!res.ok) {
+     let message = `Server returned ${res.status}`;
+     try {
+diff --git a/render.yaml b/render.yaml
+new file mode 100644
+index 0000000..f78c4b2
+--- /dev/null
++++ b/render.yaml
+@@ -0,0 +1,19 @@
++# Render Blueprint: New > Blueprint in the Render dashboard, pick this repo.
++# Secrets marked sync:false are prompted for during setup, never stored here.
++services:
++  - type: web
++    name: ttb-label-verifier
++    runtime: node
++    plan: free
++    buildCommand: npm install --omit=dev
++    startCommand: npm start
++    healthCheckPath: /api/health
++    envVars:
++      - key: NODE_ENV
++        value: production
++      - key: ANTHROPIC_API_KEY
++        sync: false
++      - key: ACCESS_CODE
++        sync: false
++      - key: DAILY_LABEL_LIMIT
++        value: "200"
+diff --git a/server.js b/server.js
+index 270b7fa..b1e805c 100644
+--- a/server.js
++++ b/server.js
+@@ -34,11 +34,20 @@ loadDotEnv(path.join(path.dirname(fileURLToPath(import.meta.url)), '.env'));
+ import { verifyLabel } from './src/core/verify.js';
+ import { extractLabel } from './src/extract/anthropic.js';
+ import { GOVERNMENT_WARNING } from './src/core/rules.js';
++import { costGuard } from './src/server/guard.js';
+ 
+ const __dirname = path.dirname(fileURLToPath(import.meta.url));
+ const app = express();
+ const PORT = process.env.PORT || 3000;
+ 
++// Render and similar hosts sit behind a proxy; trust it for req.ip etc.
++app.set('trust proxy', 1);
++
++const guard = costGuard({
++  accessCode: process.env.ACCESS_CODE || '',
++  dailyLimit: Number(process.env.DAILY_LABEL_LIMIT) || 0,
++});
++
+ /** In-memory only: nothing touches the filesystem. */
+ const upload = multer({
+   storage: multer.memoryStorage(),
+@@ -63,7 +72,8 @@ app.get('/api/health', (_req, res) => {
+   res.json({
+     ok: true,
+     modelConfigured: Boolean(process.env.ANTHROPIC_API_KEY),
+-    warningTextLength: GOVERNMENT_WARNING.length,
++    accessCodeRequired: Boolean(process.env.ACCESS_CODE),
++    dailyUsage: guard.status(),
+   });
+ });
+ 
+@@ -81,7 +91,7 @@ app.get('/api/rules', (_req, res) => {
+  * stream back to the agent as each finishes rather than waiting for the
+  * slowest label in a batch of three hundred.
+  */
+-app.post('/api/verify', upload.single('image'), async (req, res) => {
++app.post('/api/verify', guard, upload.single('image'), async (req, res) => {
+   const started = Date.now();
+   try {
+     if (!req.file) {
+@@ -130,4 +140,8 @@ app.listen(PORT, () => {
+   if (!process.env.ANTHROPIC_API_KEY) {
+     console.warn('WARNING: ANTHROPIC_API_KEY is not set — /api/verify will return read errors.');
+   }
++  console.log(
++    `Access code ${process.env.ACCESS_CODE ? 'required' : 'not required'}; ` +
++      `daily label limit ${Number(process.env.DAILY_LABEL_LIMIT) || 'none'}.`,
++  );
+ });
+diff --git a/src/extract/anthropic.js b/src/extract/anthropic.js
+index 2472504..06d48e4 100644
+--- a/src/extract/anthropic.js
++++ b/src/extract/anthropic.js
+@@ -19,7 +19,9 @@ import { EXTRACTION_PROMPT, coerceExtraction, emptyExtraction } from './prompt.j
+  * second, so it is the default; MODEL can be overridden per deployment if
+  * a harder corpus needs it.
+  */
+-const DEFAULT_MODEL = process.env.TTB_MODEL || 'claude-haiku-4-5-20251001';
++// Read at call time, not import time: server.js loads .env after ES module
++// imports have already been evaluated.
++const model = () => process.env.TTB_MODEL || 'claude-haiku-4-5-20251001';
+ const MAX_TOKENS = 2048;
+ 
+ let client = null;
+@@ -65,7 +67,7 @@ export async function extractLabel(imageBuffer, mediaType, { signal } = {}) {
+   try {
+     const response = await getClient().messages.create(
+       {
+-        model: DEFAULT_MODEL,
++        model: model(),
+         max_tokens: MAX_TOKENS,
+         messages: [
+           {
+@@ -92,7 +94,7 @@ export async function extractLabel(imageBuffer, mediaType, { signal } = {}) {
+     if (!parsed) {
+       return {
+         extraction: emptyExtraction('The label could not be read into a usable result.'),
+-        timing: { ms: Date.now() - started, model: DEFAULT_MODEL, parsed: false },
++        timing: { ms: Date.now() - started, model: model(), parsed: false },
+       };
+     }
+ 
+@@ -100,7 +102,7 @@ export async function extractLabel(imageBuffer, mediaType, { signal } = {}) {
+       extraction: coerceExtraction(parsed),
+       timing: {
+         ms: Date.now() - started,
+-        model: DEFAULT_MODEL,
++        model: model(),
+         parsed: true,
+         inputTokens: response.usage?.input_tokens ?? null,
+         outputTokens: response.usage?.output_tokens ?? null,
+@@ -109,7 +111,7 @@ export async function extractLabel(imageBuffer, mediaType, { signal } = {}) {
+   } catch (err) {
+     return {
+       extraction: emptyExtraction(`Label could not be read: ${err.message}`),
+-      timing: { ms: Date.now() - started, model: DEFAULT_MODEL, parsed: false, error: err.message },
++      timing: { ms: Date.now() - started, model: model(), parsed: false, error: err.message },
+     };
+   }
+ }
+diff --git a/src/server/guard.js b/src/server/guard.js
+new file mode 100644
+index 0000000..9674edf
+--- /dev/null
++++ b/src/server/guard.js
+@@ -0,0 +1,82 @@
++/**
++ * Cost guards for a publicly reachable deployment.
++ *
++ * A URL with an API key behind it is an open tab on someone's bill. Two
++ * cheap controls keep a demo deployment bounded:
++ *
++ *   ACCESS_CODE        Every /api/verify call must carry this code. It is
++ *                      put in the link sent to reviewers (?code=...), so
++ *                      they never have to type anything.
++ *   DAILY_LABEL_LIMIT  Maximum labels checked per UTC day, across all
++ *                      users. The counter is in memory, so a restart
++ *                      resets it; the hard backstop is a prepaid credit
++ *                      balance with auto-reload off in the Anthropic Console.
++ *
++ * Both are off when unset, so local development needs no configuration.
++ */
++
++import { timingSafeEqual } from 'node:crypto';
++
++/** Constant-time string comparison, so the code can't be guessed by timing. */
++export function codesMatch(provided, expected) {
++  const a = Buffer.from(String(provided ?? ''), 'utf8');
++  const b = Buffer.from(String(expected ?? ''), 'utf8');
++  if (a.length !== b.length) return false;
++  return timingSafeEqual(a, b);
++}
++
++/**
++ * A per-day counter. `take()` returns true and counts the request if the
++ * day's allowance remains, false otherwise. `now` is injectable for tests.
++ */
++export function createDailyLimiter(limit, now = () => new Date()) {
++  let day = '';
++  let used = 0;
++  const today = () => now().toISOString().slice(0, 10);
++
++  return {
++    take() {
++      if (!limit) return true;
++      const d = today();
++      if (d !== day) {
++        day = d;
++        used = 0;
++      }
++      if (used >= limit) return false;
++      used += 1;
++      return true;
++    },
++    status() {
++      if (today() !== day) return { limit: limit || null, used: 0 };
++      return { limit: limit || null, used };
++    },
++  };
++}
++
++/**
++ * Express middleware applying both guards to one route.
++ * Errors are plain English, because they are shown to agents as-is.
++ */
++export function costGuard({ accessCode, dailyLimit }) {
++  const limiter = createDailyLimiter(dailyLimit);
++
++  const middleware = (req, res, next) => {
++    if (accessCode) {
++      const provided = req.get('x-access-code') || req.query.code || '';
++      if (!codesMatch(provided, accessCode)) {
++        return res.status(401).json({
++          error: 'This demo needs the access link you were sent. Please open that link and try again.',
++        });
++      }
++    }
++    if (!limiter.take()) {
++      return res.status(429).json({
++        error: "Today's checking limit for this demo has been reached. Please try again tomorrow.",
++      });
++    }
++    next();
++  };
++
++  middleware.status = () => limiter.status();
++  return middleware;
++}
+diff --git a/tests/guard.test.js b/tests/guard.test.js
+new file mode 100644
+index 0000000..3177357
+--- /dev/null
++++ b/tests/guard.test.js
+@@ -0,0 +1,33 @@
++import { test, describe } from 'node:test';
++import assert from 'node:assert/strict';
++import { codesMatch, createDailyLimiter } from '../src/server/guard.js';
++
++describe('access code', () => {
++  test('matches only the exact code', () => {
++    assert.equal(codesMatch('label-demo-7', 'label-demo-7'), true);
++    assert.equal(codesMatch('label-demo-8', 'label-demo-7'), false);
++    assert.equal(codesMatch('', 'label-demo-7'), false);
++    assert.equal(codesMatch(undefined, 'label-demo-7'), false);
++  });
++});
++
++describe('daily limit', () => {
++  test('allows up to the limit, then refuses', () => {
++    const lim = createDailyLimiter(3, () => new Date('2026-09-22T10:00:00Z'));
++    assert.deepEqual([lim.take(), lim.take(), lim.take(), lim.take()], [true, true, true, false]);
++  });
++
++  test('resets on a new UTC day', () => {
++    let now = new Date('2026-09-22T23:59:00Z');
++    const lim = createDailyLimiter(1, () => now);
++    assert.equal(lim.take(), true);
++    assert.equal(lim.take(), false);
++    now = new Date('2026-09-23T00:01:00Z');
++    assert.equal(lim.take(), true);
++  });
++
++  test('no limit configured means unlimited', () => {
++    const lim = createDailyLimiter(0);
++    for (let i = 0; i < 1000; i++) assert.equal(lim.take(), true);
++  });
++});
