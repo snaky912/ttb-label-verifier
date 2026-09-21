@@ -1,4 +1,4 @@
-# Label Check — AI-Assisted TTB Label Verification
+# Label Check — AI-Powered Label Verification
 
 A prototype that checks an alcohol beverage label image against the data in its
 COLA application: brand name, class/type, alcohol content, net contents,
