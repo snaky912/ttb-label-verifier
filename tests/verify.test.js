@@ -225,6 +225,57 @@ describe('government health warning — 27 CFR 16.21', () => {
   });
 });
 
+describe('bottler / producer name and address', () => {
+  const APP_ADDR = 'Distilled and Bottled by Old Tom Distillery, Bardstown, KY';
+  const addr = (labelValue, appValue = APP_ADDR) =>
+    fieldById(run({ bottlerAddress: labelValue }, { bottlerAddress: appValue }), 'bottlerAddress');
+
+  test('label read without the "Distilled and Bottled by" lead-in still matches', () => {
+    // Regression: found in the first real-model run. Every label failed
+    // here because the model transcribed only the name and address.
+    assert.equal(addr('Old Tom Distillery, Bardstown, KY').verdict, VERDICT.PASS);
+  });
+
+  test('application entered without the lead-in matches a label that has it', () => {
+    assert.equal(addr(APP_ADDR, 'Old Tom Distillery, Bardstown, KY').verdict, VERDICT.PASS);
+  });
+
+  test('extra words picked up from nearby text do not fail the match', () => {
+    const f = addr('Old Tom Distillery, Est. 1897, Bardstown, KY');
+    assert.equal(f.verdict, VERDICT.PASS);
+    assert.match(f.message, /also includes/i);
+  });
+
+  test('a ZIP code on the label but not the application is fine', () => {
+    assert.equal(addr('Distilled and Bottled by Old Tom Distillery, Bardstown, KY 40004').verdict, VERDICT.PASS);
+  });
+
+  test('a different qualifying phrase is flagged, because the phrase has legal meaning', () => {
+    const f = addr('Bottled by Old Tom Distillery, Bardstown, KY');
+    assert.equal(f.verdict, VERDICT.REVIEW);
+    assert.match(f.message, /Bottled by/);
+  });
+
+  test('a different city is never cleared automatically', () => {
+    assert.notEqual(addr('Distilled and Bottled by Old Tom Distillery, Louisville, KY').verdict, VERDICT.PASS);
+  });
+
+  test('a different company entirely fails', () => {
+    assert.equal(addr('Bottled by Riverbend Spirits Co., Frankfort, KY').verdict, VERDICT.FAIL);
+  });
+
+  test('imported-by statements are handled the same way', () => {
+    const f = fieldById(
+      verifyLabel({
+        application: { ...APPLICATION, bottlerAddress: 'Imported by Carrick Imports LLC, Chicago, IL' },
+        extracted: { ...GOOD_LABEL, bottlerAddress: 'Carrick Imports LLC, Chicago, IL' },
+      }),
+      'bottlerAddress',
+    );
+    assert.equal(f.verdict, VERDICT.PASS);
+  });
+});
+
 describe('imports', () => {
   test('country of origin is required once the application declares an import', () => {
     const r = verifyLabel({

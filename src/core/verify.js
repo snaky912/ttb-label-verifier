@@ -16,7 +16,7 @@
  * verbatim by the server build and the browser build.
  */
 
-import { normalizeTypography, normalizeForComparison, isAllCaps } from './normalize.js';
+import { normalizeTypography, normalizeForComparison, isAllCaps, tokenize } from './normalize.js';
 import { bestSimilarity } from './similarity.js';
 import { parseAbv, parseNetContents, formatMl } from './parse.js';
 import { wordDiff, summarizeDiff } from './diff.js';
@@ -139,6 +139,117 @@ function compareText(id, label, appValue, labelValue, opts = {}) {
     verdict: VERDICT.FAIL,
     message: 'Does not match the application.',
     detail: { similarity: score },
+  });
+}
+
+/**
+ * The qualifying phrase that opens a name-and-address statement:
+ * "Distilled and Bottled by", "Imported by", "Vinted and Bottled by"...
+ * (27 CFR 5.66, 4.35, 7.66). Matched only at the start of the string.
+ */
+const ROLE_PHRASE = new RegExp(
+  '^\\s*((?:(?:distilled|bottled|produced|blended|made|prepared|manufactured|imported|' +
+    'vinted|cellared|brewed|packed|packaged|rectified|aged|canned|crafted)\\s*(?:,|and|&)?\\s*)+by)\\b[\\s:]*',
+  'i',
+);
+
+function splitAddress(value) {
+  const text = normalizeTypography(value);
+  const m = text.match(ROLE_PHRASE);
+  return m
+    ? { role: normalizeTypography(m[1]), core: text.slice(m[0].length).trim() }
+    : { role: '', core: text };
+}
+
+/**
+ * Bottler / producer name and address.
+ *
+ * A whole-string comparison fails here for reasons that have nothing to do
+ * with compliance: the lead-in phrase may be on the label but not in the
+ * application (or the reverse), and a label reader can pick up a ZIP code
+ * or an "Est. 1897" line sitting next to the address. So the statement is
+ * split into its qualifying phrase and its name-and-address core, and each
+ * is judged on its own terms:
+ *
+ *   - Name and address: a match if identical, or if every word of the
+ *     shorter version appears in the longer one (the extra words are
+ *     reported, not held against the label).
+ *   - Qualifying phrase: only compared when BOTH sides state one. When
+ *     they differ it goes to review, because "Bottled by" and "Distilled
+ *     and Bottled by" are different legal claims.
+ */
+function compareAddress(appValue, labelValue, confidence) {
+  const id = 'bottlerAddress';
+  const label = 'Bottler / producer name and address';
+
+  // Missing on either side: the generic rules already say the right thing.
+  if (!normalizeTypography(appValue) || !normalizeTypography(labelValue)) {
+    return compareText(id, label, appValue, labelValue, { confidence });
+  }
+
+  const app = splitAddress(appValue);
+  const lab = splitAddress(labelValue);
+  const base = {
+    applicationValue: normalizeTypography(appValue),
+    labelValue: normalizeTypography(labelValue),
+    confidence,
+  };
+
+  const roleDiffers =
+    app.role && lab.role && normalizeForComparison(app.role) !== normalizeForComparison(lab.role);
+
+  // --- Name-and-address core ---
+  const appTokens = tokenize(app.core);
+  const labTokens = tokenize(lab.core);
+  const appSet = new Set(appTokens);
+  const labSet = new Set(labTokens);
+  const shared = [...appSet].filter((t) => labSet.has(t)).length;
+  const smaller = Math.min(appSet.size, labSet.size);
+  const overlap = smaller ? shared / smaller : 0;
+
+  let coreVerdict;
+  let coreNote = '';
+  const detail = { applicationCore: app.core, labelCore: lab.core, overlap: Math.round(overlap * 100) / 100 };
+
+  if (normalizeForComparison(app.core) === normalizeForComparison(lab.core)) {
+    coreVerdict = VERDICT.PASS;
+  } else if (smaller >= 2 && overlap >= 0.85) {
+    coreVerdict = VERDICT.PASS;
+    const labelExtra = labTokens.filter((t) => !appSet.has(t));
+    const appExtra = appTokens.filter((t) => !labSet.has(t));
+    if (labelExtra.length) coreNote = ` The label also includes: ${labelExtra.join(' ')}.`;
+    else if (appExtra.length) coreNote = ` The application also includes: ${appExtra.join(' ')}.`;
+  } else {
+    const score = bestSimilarity(app.core, lab.core);
+    detail.similarity = score;
+    coreVerdict =
+      score >= THRESHOLDS.autoPass ? VERDICT.PASS : score >= THRESHOLDS.review ? VERDICT.REVIEW : VERDICT.FAIL;
+  }
+
+  if (coreVerdict === VERDICT.FAIL) {
+    return field(id, label, { ...base, verdict: VERDICT.FAIL, message: 'The name and address do not match the application.', detail });
+  }
+  if (coreVerdict === VERDICT.REVIEW) {
+    return field(id, label, {
+      ...base,
+      verdict: VERDICT.REVIEW,
+      message: `The name and address are close but not identical (${Math.round(detail.similarity * 100)}% similar). Needs an agent's judgement.`,
+      detail,
+    });
+  }
+  if (roleDiffers) {
+    return field(id, label, {
+      ...base,
+      verdict: VERDICT.REVIEW,
+      message: `The name and address match, but the application says "${app.role}" and the label says "${lab.role}". These phrases make different claims, so an agent should confirm.${coreNote}`,
+      detail: { ...detail, applicationRole: app.role, labelRole: lab.role },
+    });
+  }
+  return field(id, label, {
+    ...base,
+    verdict: VERDICT.PASS,
+    message: `The name and address match.${coreNote}`,
+    detail,
   });
 }
 
@@ -367,9 +478,7 @@ export function verifyLabel({ application = {}, extracted = {}, options = {} }) 
     }),
     compareAbv(application.alcoholContent, extracted.alcoholContent, beverageClass, confidence.alcoholContent ?? null),
     compareNetContents(application.netContents, extracted.netContents, beverageClass, confidence.netContents ?? null),
-    compareText('bottlerAddress', 'Bottler / producer name and address', application.bottlerAddress, extracted.bottlerAddress, {
-      confidence: confidence.bottlerAddress ?? null,
-    }),
+    compareAddress(application.bottlerAddress, extracted.bottlerAddress, confidence.bottlerAddress ?? null),
     compareText('countryOfOrigin', 'Country of origin', application.countryOfOrigin, extracted.countryOfOrigin, {
       required: isImport,
       confidence: confidence.countryOfOrigin ?? null,

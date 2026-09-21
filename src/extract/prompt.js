@@ -83,7 +83,7 @@ Field guidance:
 - classType: the class or type designation, e.g. "Kentucky Straight Bourbon Whiskey", "Cabernet Sauvignon", "India Pale Ale".
 - alcoholContent: the whole statement as printed, e.g. "45% Alc./Vol. (90 Proof)".
 - netContents: the whole statement as printed, e.g. "750 mL".
-- bottlerAddress: the bottler/producer/importer name and address line(s), joined with ", ".
+- bottlerAddress: the full name-and-address statement as printed, INCLUDING its lead-in phrase such as "Distilled and Bottled by", "Imported by" or "Vinted and Bottled by", then the name, city and state, joined with ", ". Do not include other nearby text such as an "Est." date or a slogan.
 - countryOfOrigin: only if printed (imports); otherwise "".
 - governmentWarning: the ENTIRE health warning paragraph, verbatim, starting with the warning prefix as printed.
 - warningPrefixBold: true if the "GOVERNMENT WARNING:" prefix appears in bold/heavier type than the rest of the paragraph, false if it does not, null if you cannot tell.
