@@ -11,7 +11,25 @@
 import express from 'express';
 import multer from 'multer';
 import path from 'node:path';
+import { readFileSync, existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
+
+/**
+ * Load a local .env file if one exists. A few lines instead of the dotenv
+ * package: one less dependency, and it works the same on Windows, macOS
+ * and Linux without anyone needing shell-specific syntax to set a key.
+ * Real environment variables always win over the file.
+ */
+function loadDotEnv(file) {
+  if (!existsSync(file)) return;
+  for (const line of readFileSync(file, 'utf8').split(/\r?\n/)) {
+    const m = line.match(/^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*?)\s*$/);
+    if (!m || line.trim().startsWith('#')) continue;
+    const value = m[2].replace(/^(['"])(.*)\1$/, '$2');
+    if (process.env[m[1]] === undefined && value !== '') process.env[m[1]] = value;
+  }
+}
+loadDotEnv(path.join(path.dirname(fileURLToPath(import.meta.url)), '.env'));
 
 import { verifyLabel } from './src/core/verify.js';
 import { extractLabel } from './src/extract/anthropic.js';
