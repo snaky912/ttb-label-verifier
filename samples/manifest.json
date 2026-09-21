@@ -1,0 +1,142 @@
+[
+  {
+    "file": "01-compliant.png",
+    "title": "Fully compliant bourbon",
+    "expectedVerdict": "pass",
+    "note": "",
+    "application": {
+      "brandName": "OLD TOM DISTILLERY",
+      "classType": "Kentucky Straight Bourbon Whiskey",
+      "alcoholContent": "45% Alc./Vol. (90 Proof)",
+      "netContents": "750 mL",
+      "bottlerAddress": "Distilled and Bottled by Old Tom Distillery, Bardstown, KY",
+      "countryOfOrigin": ""
+    }
+  },
+  {
+    "file": "02-warning-title-case.png",
+    "title": "Warning prefix in title case",
+    "expectedVerdict": "fail",
+    "note": "The defect Jenny Park described catching by eye.",
+    "application": {
+      "brandName": "OLD TOM DISTILLERY",
+      "classType": "Kentucky Straight Bourbon Whiskey",
+      "alcoholContent": "45% Alc./Vol. (90 Proof)",
+      "netContents": "750 mL",
+      "bottlerAddress": "Distilled and Bottled by Old Tom Distillery, Bardstown, KY",
+      "countryOfOrigin": ""
+    }
+  },
+  {
+    "file": "03-warning-paraphrased.png",
+    "title": "Paraphrased warning text",
+    "expectedVerdict": "fail",
+    "note": "",
+    "application": {
+      "brandName": "OLD TOM DISTILLERY",
+      "classType": "Kentucky Straight Bourbon Whiskey",
+      "alcoholContent": "45% Alc./Vol. (90 Proof)",
+      "netContents": "750 mL",
+      "bottlerAddress": "Distilled and Bottled by Old Tom Distillery, Bardstown, KY",
+      "countryOfOrigin": ""
+    }
+  },
+  {
+    "file": "04-warning-missing.png",
+    "title": "No health warning at all",
+    "expectedVerdict": "fail",
+    "note": "",
+    "application": {
+      "brandName": "OLD TOM DISTILLERY",
+      "classType": "Kentucky Straight Bourbon Whiskey",
+      "alcoholContent": "45% Alc./Vol. (90 Proof)",
+      "netContents": "750 mL",
+      "bottlerAddress": "Distilled and Bottled by Old Tom Distillery, Bardstown, KY",
+      "countryOfOrigin": ""
+    }
+  },
+  {
+    "file": "05-abv-mismatch.png",
+    "title": "Label ABV differs from the application",
+    "expectedVerdict": "fail",
+    "note": "",
+    "application": {
+      "brandName": "OLD TOM DISTILLERY",
+      "classType": "Kentucky Straight Bourbon Whiskey",
+      "alcoholContent": "45% Alc./Vol.",
+      "netContents": "750 mL",
+      "bottlerAddress": "Distilled and Bottled by Old Tom Distillery, Bardstown, KY",
+      "countryOfOrigin": ""
+    }
+  },
+  {
+    "file": "06-brand-case-variant.png",
+    "title": "Brand case differs only — Dave Morrison's STONE'S THROW case",
+    "expectedVerdict": "pass",
+    "note": "Should clear automatically despite not being byte-identical.",
+    "application": {
+      "brandName": "STONE'S THROW",
+      "classType": "Kentucky Straight Bourbon Whiskey",
+      "alcoholContent": "45% Alc./Vol. (90 Proof)",
+      "netContents": "750 mL",
+      "bottlerAddress": "Distilled and Bottled by Old Tom Distillery, Bardstown, KY",
+      "countryOfOrigin": ""
+    }
+  },
+  {
+    "file": "07-import-scotch.png",
+    "title": "Imported scotch with country of origin",
+    "expectedVerdict": "pass",
+    "note": "",
+    "application": {
+      "brandName": "GLEN CARRICK",
+      "classType": "Blended Scotch Whisky",
+      "alcoholContent": "43% Alc./Vol.",
+      "netContents": "750 mL",
+      "bottlerAddress": "Imported by Carrick Imports LLC, Chicago, IL",
+      "countryOfOrigin": "Product of Scotland"
+    }
+  },
+  {
+    "file": "08-tiny-warning.png",
+    "title": "Warning set in very small type",
+    "expectedVerdict": "pass",
+    "note": "Text is correct; legibility of the type size is a human judgement the tool surfaces but does not score.",
+    "application": {
+      "brandName": "OLD TOM DISTILLERY",
+      "classType": "Kentucky Straight Bourbon Whiskey",
+      "alcoholContent": "45% Alc./Vol. (90 Proof)",
+      "netContents": "750 mL",
+      "bottlerAddress": "Distilled and Bottled by Old Tom Distillery, Bardstown, KY",
+      "countryOfOrigin": ""
+    }
+  },
+  {
+    "file": "09-angled-glare.png",
+    "title": "Photographed at an angle with glare",
+    "expectedVerdict": "pass",
+    "note": "Jenny Park's ask: imperfect photography should still be readable.",
+    "application": {
+      "brandName": "OLD TOM DISTILLERY",
+      "classType": "Kentucky Straight Bourbon Whiskey",
+      "alcoholContent": "45% Alc./Vol. (90 Proof)",
+      "netContents": "750 mL",
+      "bottlerAddress": "Distilled and Bottled by Old Tom Distillery, Bardstown, KY",
+      "countryOfOrigin": ""
+    }
+  },
+  {
+    "file": "10-blurred.png",
+    "title": "Out of focus photograph",
+    "expectedVerdict": "review",
+    "note": "Should surface low confidence rather than a confident rejection.",
+    "application": {
+      "brandName": "OLD TOM DISTILLERY",
+      "classType": "Kentucky Straight Bourbon Whiskey",
+      "alcoholContent": "45% Alc./Vol. (90 Proof)",
+      "netContents": "750 mL",
+      "bottlerAddress": "Distilled and Bottled by Old Tom Distillery, Bardstown, KY",
+      "countryOfOrigin": ""
+    }
+  }
+]

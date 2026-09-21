@@ -1,0 +1,11 @@
+file,brandName,classType,alcoholContent,netContents,bottlerAddress,countryOfOrigin
+"01-compliant.png","OLD TOM DISTILLERY","Kentucky Straight Bourbon Whiskey","45% Alc./Vol. (90 Proof)","750 mL","Distilled and Bottled by Old Tom Distillery, Bardstown, KY",""
+"02-warning-title-case.png","OLD TOM DISTILLERY","Kentucky Straight Bourbon Whiskey","45% Alc./Vol. (90 Proof)","750 mL","Distilled and Bottled by Old Tom Distillery, Bardstown, KY",""
+"03-warning-paraphrased.png","OLD TOM DISTILLERY","Kentucky Straight Bourbon Whiskey","45% Alc./Vol. (90 Proof)","750 mL","Distilled and Bottled by Old Tom Distillery, Bardstown, KY",""
+"04-warning-missing.png","OLD TOM DISTILLERY","Kentucky Straight Bourbon Whiskey","45% Alc./Vol. (90 Proof)","750 mL","Distilled and Bottled by Old Tom Distillery, Bardstown, KY",""
+"05-abv-mismatch.png","OLD TOM DISTILLERY","Kentucky Straight Bourbon Whiskey","45% Alc./Vol.","750 mL","Distilled and Bottled by Old Tom Distillery, Bardstown, KY",""
+"06-brand-case-variant.png","STONE'S THROW","Kentucky Straight Bourbon Whiskey","45% Alc./Vol. (90 Proof)","750 mL","Distilled and Bottled by Old Tom Distillery, Bardstown, KY",""
+"07-import-scotch.png","GLEN CARRICK","Blended Scotch Whisky","43% Alc./Vol.","750 mL","Imported by Carrick Imports LLC, Chicago, IL","Product of Scotland"
+"08-tiny-warning.png","OLD TOM DISTILLERY","Kentucky Straight Bourbon Whiskey","45% Alc./Vol. (90 Proof)","750 mL","Distilled and Bottled by Old Tom Distillery, Bardstown, KY",""
+"09-angled-glare.png","OLD TOM DISTILLERY","Kentucky Straight Bourbon Whiskey","45% Alc./Vol. (90 Proof)","750 mL","Distilled and Bottled by Old Tom Distillery, Bardstown, KY",""
+"10-blurred.png","OLD TOM DISTILLERY","Kentucky Straight Bourbon Whiskey","45% Alc./Vol. (90 Proof)","750 mL","Distilled and Bottled by Old Tom Distillery, Bardstown, KY",""
